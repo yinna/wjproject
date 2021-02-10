@@ -2,7 +2,6 @@
   <div>
     <el-row style="height: 840px;">
       <search-bar @onSearch="searchResult" ref="searchBar"></search-bar>
-      <view-switch class="switch"></view-switch>
       <el-tooltip effect="dark" placement="right"
                   v-for="item in books.slice((currentPage-1)*pagesize,currentPage*pagesize)"
                   :key="item.id">
@@ -43,11 +42,9 @@
 <script>
   import EditForm from './EditForm'
   import SearchBar from './SearchBar'
-  import ViewSwitch from './ViewSwitch'
-
   export default {
     name: 'Books',
-    components: {EditForm, SearchBar, ViewSwitch},
+    components: {EditForm, SearchBar},
     data () {
       return {
         books: [],
@@ -69,12 +66,12 @@
       },
       handleCurrentChange: function (currentPage) {
         this.currentPage = currentPage
+        console.log(this.currentPage)
       },
       searchResult () {
         var _this = this
         this.$axios
-          .post('/search', {
-            keywords: this.$refs.searchBar.keywords
+          .get('/search?keywords=' + this.$refs.searchBar.keywords, {
           }).then(resp => {
           if (resp && resp.status === 200) {
             _this.books = resp.data
@@ -117,9 +114,6 @@
             name: item.category.name
           }
         }
-        // this.$refs.edit.category = {
-        //   id: item.category.id.toString()
-        // }
       }
     }
   }
@@ -179,3 +173,4 @@
   }
 
 </style>
+

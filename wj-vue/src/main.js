@@ -1,84 +1,88 @@
 // The Vue build version to load with the `import` command
 // (runtime-only or standalone) has been set in webpack.base.conf with an alias.
 import Vue from 'vue'
-import ElementUI from 'element-ui'
-import 'element-ui/lib/theme-chalk/index.css'
 import App from './App'
 import router from './router'
-import mavonEditor from 'mavon-editor'
-import 'mavon-editor/dist/css/index.css'
+import ElementUI from 'element-ui'
+import 'element-ui/lib/theme-chalk/index.css'
 import store from './store'
 
+// 设置反向代理，前端请求默认发送到http://localhost:8443/api
 var axios = require('axios')
 axios.defaults.baseURL = 'http://localhost:8443/api'
-// 使请求带上凭证信息
-axios.defaults.withCredentials = true
-
+// 全局注册，之后可以在其它组件中通过this.$axios 发送数据
 Vue.prototype.$axios = axios
+axios.defaults.withCredentials = true
 Vue.config.productionTip = false
+
 Vue.use(ElementUI)
-Vue.use(mavonEditor)
 
-// 如果前端没有登录信息则直接拦截，如果有则判断后端是否正常登录（防止构造参数绕过）
-router.beforeEach((to, from, next) => {
-    if (to.meta.requireAuth) {
-      if (store.state.user) {
-        axios.get('/authentication').then(resp => {
-          if (resp) next()
-        })
-      } else {
-        next({
-          path: 'login',
-          query: {redirect: to.fullPath}
-        })
-      }
-    } else {
-      next()
-    }
+router.beforeEach((to,from,next) => {
+  if (store.state.user.username && to.path.startsWith('/admin')){
+    initAdminMenu(router,store)
   }
-)
-// http request拦截器，为请求加上 token
-axios.interceptors.request.use(
-  config => {
-    // 输出当前状态下的 token
-    // console.log(store.state.user.token)
-    if (store.state.user.token) {
-      // 判断当前是否存在token，如果存在的话，则每个http header都加上token
-      // config.headers.Token = `token ${JSON.stringify(store.state.user.token)}`
-      config.headers.Token = JSON.stringify(store.state.user.token)
-    } else {
-      config.headers.Token = null
-    }
-    return config
-  },
-  err => {
-    return Promise.reject(err)
-  }
-)
-
-// http response 拦截器
-axios.interceptors.response.use(
-  response => {
-    return response
-  },
-  error => {
-    console.log(error.response)
-    if (error) {
-      router.replace({
-        path: 'login',
-        query: {redirect: router.currentRoute.fullPath}
+  //已经登录状态下访问login页面，页面直接跳转到后台首页
+  // if (store.state.username && to.path.startsWith('/login')){
+  //   next({
+  //     path: 'admin/dashboard'
+  //   })
+  // }
+  if (to.meta.requireAuth) {
+    if(store.state.user.username){
+      axios.get('/authentication').then(resp => {
+        if(resp) next()
+      })
+    }else{
+      next({
+        path:'login',
+        query:{redirect:to.fullPath}
       })
     }
-    // 返回接口返回的错误信息
-    return Promise.reject(error.response.data)
+  }else {
+    next()
+  }
+})
+
+const initAdminMenu = (router,store) => {
+  if (store.state.adminMenus.length>0) {
+    return
+  }
+  axios.get('/menu').then(resp =>{
+    if (resp &&resp.status === 200){
+      var fmtRoutes = formatRoutes(resp.data)
+      router.addRoutes(fmtRoutes)
+      store.commit('initAdminMenu',fmtRoutes)
+    }
   })
+}
+const formatRoutes = (routes) => {
+  let fmtRoutes = []
+  routes.forEach(route => {
+    if (route.children){
+      route.children = formatRoutes(route.children)
+    }
+
+    let fmtRoute = {
+      path:route.path,
+      component: resolve =>{
+        require(['./components/admin/'+ route.component + '.vue'],resolve)
+      },
+      name: route.name,
+      nameZh: route.nameZh,
+      iconCls: route.iconCls,
+      children: route.children
+    }
+    fmtRoutes.push(fmtRoute)
+  })
+  return fmtRoutes
+}
 
 /* eslint-disable no-new */
 new Vue({
   el: '#app',
-  render: h => h(App),
+  render: h =>h(App),
   router,
   store,
-  components: {App},
+  components: { App },
   template: '<App/>'
 })
